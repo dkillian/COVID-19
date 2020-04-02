@@ -13,7 +13,7 @@ rec <- read_csv("csse_covid_19_data/csse_covid_19_time_series/time_series_19-cov
 
 cases <- read_csv("csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
 
-
+names(cases)
 
 
 # US cases -------------------------------------------------------------------
@@ -30,7 +30,7 @@ usC <- cases %>%
 usC
 
 byDay <- usC %>%
-  pivot_longer(cols=5:65,
+  pivot_longer(cols=5:ncol(usC),
                names_to="day",
                values_to="cases") %>%
   select(-Lat, -Long) %>%
@@ -145,21 +145,27 @@ case_ends
 
 tail(byDay)
 
+  # with legend
+
 ggplot(byDay, aes(day, cases, color=fct_rev(country2))) + 
   stat_smooth(size=1, alpha=.2, se=F, span=.1) + 
   scale_color_viridis_d() + 
-  scale_x_datetime(limits=c(as.POSIXct("2020-02-25"), as.POSIXct("2020-03-23")),
-                   breaks=date_breaks("12 days"),
+  scale_x_datetime(limits=c(as.POSIXct("2020-03-01"), as.POSIXct("2020-03-25")),
+                   breaks=date_breaks("8 days"),
                    labels=date_format("%b-%d")) +
   scale_y_continuous(limits=c(0,82000),
                      breaks=seq(0,80000,10000),
                      labels=comma) +
   labs(x="",
        y="",
-       title="COVID-19 cases for hardest hit countries\n25 Feb through 23 March, 2020") +
-  theme(legend.title=element_blank()) 
+       title="COVID-19 cases for hardest hit countries\n25 Feb through 23 March, 2020") + 
+  spec + 
+  theme(legend.title=element_blank(),
+        panel.border=element_blank(),
+        axis.ticks=element_blank())
 
-ggsave("viz/top country cases 23 March 2020.png",
+
+ggsave("viz/top country cases 26 March 2020 legend.png",
        device="png",
        type="cairo",
        height=6,
@@ -170,15 +176,12 @@ ggsave("viz/top country cases 23 March 2020.png",
 ggplot(byDay, aes(day, cases, color=fct_rev(country2))) + 
   stat_smooth(size=1, alpha=.2, se=F, span=.1) + 
   scale_color_viridis_d() + 
-  scale_x_datetime(limits=c(as.POSIXct("2020-02-25"), as.POSIXct("2020-03-23")),
+  scale_x_datetime(limits=c(as.POSIXct("2020-03-01"), as.POSIXct("2020-03-27")),
                    breaks=date_breaks("6 days"),
                    labels=date_format("%b-%d")) +
   scale_y_continuous(limits=c(0,82000),
                      breaks=seq(0,80000,10000),
-                     labels=comma,
-                     sec.axis=sec_axis(~., 
-                                       breaks=case_ends,
-                                       labels=comma)) +
+                     labels=comma) +
   labs(x="",
        y="",
        title="COVID-19 cases for hardest hit countries\n25 Feb through 23 March, 2020") +
@@ -191,7 +194,7 @@ ggplot(byDay, aes(day, cases, color=fct_rev(country2))) +
         panel.border = element_blank(),
         axis.ticks=element_blank()) 
 
-ggsave("viz/top country cases 23 March 2020 label.png",
+ggsave("viz/top country cases 26 March 2020 label.png",
        device="png",
        type="cairo",
        height=6,
@@ -203,7 +206,7 @@ ggsave("viz/top country cases 23 March 2020 label.png",
 ggplot(byDay, aes(day, cases, color=fct_rev(country2))) + 
   stat_smooth(size=1, alpha=.2, se=F, span=.1) + 
   scale_color_viridis_d() + 
-  scale_x_datetime(limits=c(as.POSIXct("2020-02-25"), as.POSIXct("2020-03-23")),
+  scale_x_datetime(limits=c(as.POSIXct("2020-03-05"), as.POSIXct("2020-03-25")),
                    breaks=date_breaks("6 days"),
                    labels=date_format("%b-%d")) +
   scale_y_continuous(limits=c(0,82000),
@@ -214,17 +217,17 @@ ggplot(byDay, aes(day, cases, color=fct_rev(country2))) +
                                        labels=lab)) +
   labs(x="",
        y="",
-       title="COVID-19 cases for hardest hit countries\n25 Feb through 23 March, 2020") +
+       title="COVID-19 cases for hardest hit countries\nMarch 5 - 25, 2020") +
   theme(legend.title=element_blank()) + 
   spec +
   theme(legend.position="none",
         panel.border = element_blank(),
         axis.ticks=element_blank()) 
 
-ggsave("viz/top country cases 23 March 2020 sec.y.png",
+ggsave("viz/top country cases 26 March 2020 sec y.png",
        device="png",
        type="cairo",
-       height=7,
+       height=9,
        width=7)
 
 
