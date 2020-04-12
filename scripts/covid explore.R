@@ -20,6 +20,9 @@ cases <- read_csv("csse_covid_19_data/csse_covid_19_time_series/time_series_covi
 
 names(cases)
 
+dths <- read_csv("csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+
+
 
 # US cases -------------------------------------------------------------------
 
@@ -35,11 +38,7 @@ usC <- cases %>%
 usC
 
 byDay <- usC %>%
-<<<<<<< HEAD
-  pivot_longer(cols=5:ncol(usC),
-=======
   pivot_longer(cols=5:ncol(cases),
->>>>>>> aa49834f2dfa655fe0e6b04c2d9eada6b38dd597
                names_to="day",
                values_to="cases") %>%
   select(-Lat, -Long) %>%
@@ -102,8 +101,7 @@ ggsave("viz/growth rate in US cases 28 March 2020 no border.png",
 
 head(cases[,1:5])
 
-?ncol
-ncol(byDay)
+library(RcppRoll)
 
 byDay <- cases %>%
   pivot_longer(cols=5:ncol(cases),
@@ -115,8 +113,176 @@ byDay <- cases %>%
   mutate(day = as.POSIXct(strptime(day, format="%m/%d/%y"))) %>%
   filter(country == "China" | country == "France" | country == "Germany" |# country == "Iran" | 
            country == "Italy" | country == "Spain" | country == "US") %>%
-  arrange(desc(cases)) %>%
-  as.data.frame 
+  arrange(desc(country, day)) %>%
+  group_by(country) %>%
+  mutate(new_cases=cases - lag(cases, order_by=day),
+         week=isoweek(day)) %>%
+  arrange(desc(country, day)) %>%
+  group_by(country) %>%
+  mutate(wk_new = roll_sum(new_cases, 7, align="right", fill=NA))
+
+
+  # legend
+
+ggplot(byDay, aes(cases, wk_new, color=country)) + 
+  #geom_point() + 
+  stat_smooth(se=F) +
+  scale_color_viridis_d() + 
+  scale_x_log10(labels=comma) + 
+  scale_y_log10(labels=comma) + 
+  labs(x="Total confirmed cases",
+       y="New cases\n(previous week)",
+       title="Trajectory of COVID-19 Confirmed Cases\n22 Jan - 1 Apr, 2020") +
+  theme(axis.title.y=element_text(angle=0, vjust=.5))
+
+ggsave("viz/covid trajectory legend.png",
+       device="png",
+       type="cairo",
+       height=5,
+       width=9)
+
+
+  # labels
+
+byDay <- byDay %>%
+  mutate(label = ifelse(day==max(day), as.character(country), NA_character_),
+         country2 = fct_reorder(country, cases, max))
+
+frq(byDay$label)
+
+?rank
+rank(byDay$country)
+frq(byDay$country2)
+
+str(byDay)
+head(byDay)
+tail(byDay)
+
+?distinct
+lab <- byDay %>%
+  distinct(label) %>%
+  na.omit %>%
+  unlist
+
+lab
+
+case_ends <- byDay %>%
+  group_by(country) %>%
+  top_n(1,cases) %>%
+  pull(cases)
+
+case_ends
+
+
+ggplot(byDay, aes(cases, wk_new, color=country)) + 
+  #geom_point() + 
+  stat_smooth(se=F) +
+  scale_color_viridis_d() + 
+  scale_x_log10(labels=comma_format(accuracy=2), 
+                breaks=c(1,10,100,1000,10000, 100000),
+                limits=c(1,250000)) + 
+  scale_y_log10(labels=comma) + 
+  labs(x="Total confirmed cases",
+       y="New confirmed cases\nfor the previous week",
+       title="Trajectory of COVID-19 Confirmed Cases\n22 Jan - 1 Apr, 2020") +
+  geom_label_repel(aes(label=label)) +
+  theme(legend.position="none")
+
+ggsave("viz/covid trajectory legend.png",
+       device="png",
+       type="cairo",
+       height=5,
+       width=7)
+
+
+ggplot(byDay, aes(cases, wk_new, color=country)) + 
+  #geom_point() + 
+  stat_smooth(se=F) +
+  scale_color_viridis_d() + 
+  scale_x_log10(labels=comma_format(accuracy=1), 
+                breaks=c(1,10,100,1000,10000),
+                limits=c(1,150000)) + 
+  scale_y_log10(labels=comma) + 
+  labs(x="Total confirmed cases",
+       y="New confirmed cases\nfor the previous week",
+       title="Trajectory of COVID-19 Confirmed Cases\n22 Jan - 1 Apr, 2020")
+
+ggsave("viz/covid trajectory legend.png",
+       device="png",
+       type="cairo",
+       height=5,
+       width=7)
+
+
+  # animate
+
+library(gganimate)
+
+str(byDay)
+head(byDay)
+
+p <- ggplot(byDay, aes(cases, wk_new, color=country)) + 
+  geom_label(aes(label=country)) + 
+  #geom_line() +
+  #stat_smooth(se=F, formula = y ~ x) +
+  scale_color_viridis_d() + 
+  scale_x_log10(labels=comma) + 
+  scale_y_log10(labels=comma) + 
+  labs(x="Total confirmed cases",
+       y="New cases\n(previous week)",
+       title="Trajectory of COVID-19 Confirmed Cases\n22 Jan - 1 Apr, 2020") +
+  theme(axis.title.y=element_text(angle=0, vjust=.5)) +
+  transition_time(day) +
+  ease_aes("linear") +
+  theme(legend.position="none")
+
++
+  shadow_mark(past=T)
+
+?animate
+animate(p,fps=2)
+
+p
+
+anim_save("viz/covid trajectory.gif", p,  width= 1500, height=1000)
+
+
+ggsave("viz/covid trajectory legend.png",
+       device="png",
+       type="cairo",
+       height=5,
+       width=9)
+
+
+
+
+?scale_x_log10
+?split
+
+out <- split(byDay, f=list(byDay$country, byDay$week))
+
+new_week <- map(out, function(x) cumsum(x$new_cases)) %>%
+  .[7:66]
+
+new_week[31]
+
+out2 <- map_dfr(new_week, as.list)
+
+str(out)
+out[66]
+
+  byDay %>%
+  group_by(week, country) %>%
+  summarize(wk_cases = cumsum(new_cases))
+  
+cntry <- byDay %>%
+  split(country)
+
+
+out <- split(byDay, byDay$country)
+
+
+c2 <- lag(byDay$cases)
 
 head(byDay)
 tail(byDay)
@@ -127,7 +293,8 @@ frq(byDay$country)
 
 byDay <- byDay %>%
   mutate(label = ifelse(day==max(day), as.character(country), NA_character_),
-         country2 = fct_reorder(country, cases, max))
+         country2 = fct_reorder(country, cases, max),
+         log_cases=ln(cases))
 
 frq(byDay$label)
 
@@ -161,22 +328,22 @@ tail(byDay)
 ggplot(byDay, aes(day, cases, color=fct_rev(country2))) + 
   stat_smooth(size=1, alpha=.2, se=F, span=.1) + 
   scale_color_viridis_d() + 
-  scale_x_datetime(limits=c(as.POSIXct("2020-03-01"), as.POSIXct("2020-03-25")),
-                   breaks=date_breaks("8 days"),
+  scale_x_datetime(limits=c(as.POSIXct("2020-03-01"), as.POSIXct("2020-04-01")),
+                   breaks=date_breaks("6 days"),
                    labels=date_format("%b-%d")) +
-  scale_y_continuous(limits=c(0,82000),
-                     breaks=seq(0,80000,10000),
+  scale_y_continuous(limits=c(0,225000),
+                     breaks=seq(0,225000,25000),
                      labels=comma) +
   labs(x="",
        y="",
-       title="COVID-19 cases for hardest hit countries\n25 Feb through 23 March, 2020") + 
+       title="COVID-19 cases for hardest hit countries\n1 March - 1 April, 2020") + 
   spec + 
   theme(legend.title=element_blank(),
         panel.border=element_blank(),
         axis.ticks=element_blank())
 
 
-ggsave("viz/top country cases 26 March 2020 legend.png",
+ggsave("viz/top country cases 1 April 2020 legend.png",
        device="png",
        type="cairo",
        height=6,
@@ -187,11 +354,11 @@ ggsave("viz/top country cases 26 March 2020 legend.png",
 ggplot(byDay, aes(day, cases, color=fct_rev(country2))) + 
   stat_smooth(size=1, alpha=.2, se=F, span=.1) + 
   scale_color_viridis_d() + 
-  scale_x_datetime(limits=c(as.POSIXct("2020-03-01"), as.POSIXct("2020-03-27")),
+  scale_x_datetime(limits=c(as.POSIXct("2020-03-01"), as.POSIXct("2020-04-02")),
                    breaks=date_breaks("6 days"),
                    labels=date_format("%b-%d")) +
-  scale_y_continuous(limits=c(0,82000),
-                     breaks=seq(0,80000,10000),
+  scale_y_continuous(limits=c(0,235000),
+                     breaks=seq(0,225000,25000),
                      labels=comma) +
   labs(x="",
        y="",
@@ -205,7 +372,7 @@ ggplot(byDay, aes(day, cases, color=fct_rev(country2))) +
         panel.border = element_blank(),
         axis.ticks=element_blank()) 
 
-ggsave("viz/top country cases 26 March 2020 label.png",
+ggsave("viz/top country cases 1 April 2020 label.png",
        device="png",
        type="cairo",
        height=6,
@@ -217,37 +384,26 @@ ggsave("viz/top country cases 26 March 2020 label.png",
 ggplot(byDay, aes(day, cases, color=fct_rev(country2))) + 
   stat_smooth(size=1, alpha=.2, se=F, span=.1) + 
   scale_color_viridis_d() + 
-<<<<<<< HEAD
-  scale_x_datetime(limits=c(as.POSIXct("2020-03-05"), as.POSIXct("2020-03-25")),
-=======
-  scale_x_datetime(limits=c(as.POSIXct("2020-03-01"), as.POSIXct("2020-03-27")),
->>>>>>> aa49834f2dfa655fe0e6b04c2d9eada6b38dd597
+  scale_x_datetime(limits=c(as.POSIXct("2020-03-01"), as.POSIXct("2020-04-01")),
                    breaks=date_breaks("6 days"),
                    labels=date_format("%b-%d")) +
-  scale_y_continuous(limits=c(0,102000),
-                     breaks=seq(0,100000,10000),
+  scale_y_continuous(limits=c(0,225000),
+                     breaks=seq(0,225000,25000),
                      labels=comma,
                      sec.axis=sec_axis(~., 
                                        breaks=case_ends,
-                                       labels=lab)) +
+                                       labels=lab[1:6])) +
   labs(x="",
        y="",
-<<<<<<< HEAD
-       title="COVID-19 cases for hardest hit countries\nMarch 5 - 25, 2020") +
-=======
-       title="COVID-19 cases for hardest hit countries\nMarch 1-27, 2020") +
->>>>>>> aa49834f2dfa655fe0e6b04c2d9eada6b38dd597
+       title="COVID-19 cases for hardest hit countries\nMarch 1 - April 1, 2020") +
   theme(legend.title=element_blank()) + 
   spec +
   theme(legend.position="none",
         panel.border = element_blank(),
         axis.ticks=element_blank()) 
 
-<<<<<<< HEAD
-ggsave("viz/top country cases 26 March 2020 sec y.png",
-=======
-ggsave("viz/top country cases 28 March 2020 sec y.png",
->>>>>>> aa49834f2dfa655fe0e6b04c2d9eada6b38dd597
+
+ggsave("viz/top country cases 1 April 2020 sec y.png",
        device="png",
        type="cairo",
        height=9,
@@ -255,7 +411,35 @@ ggsave("viz/top country cases 28 March 2020 sec y.png",
 
 
 
-  
+  # secondary y axis, log scale
+
+ggplot(byDay, aes(day, cases, color=fct_rev(country2))) + 
+  stat_smooth(size=1, alpha=.2, se=F, span=.1, method="lm") + 
+  scale_color_viridis_d() + 
+  scale_x_datetime(limits=c(as.POSIXct("2020-03-01"), as.POSIXct("2020-04-01")),
+                   breaks=date_breaks("6 days"),
+                   labels=date_format("%b-%d")) +
+  scale_y_log10(labels=comma,
+                sec.axis=sec_axis(~.,
+                                  breaks=case_ends,
+                                  labels=lab[1:6])) +
+  labs(x="",
+       y="",
+       title="COVID-19 cases for hardest hit countries\nMarch 1 - April 1, 2020") +
+  theme(legend.title=element_blank()) + 
+  spec +
+  theme(legend.position="none",
+        panel.border = element_blank(),
+        axis.ticks=element_blank()) 
+
+
+ggsave("viz/top country cases 1 April 2020 sec y.png",
+       device="png",
+       type="cairo",
+       height=9,
+       width=7)
+
+
 
 # US locations ------------------------------------------------------------
 
