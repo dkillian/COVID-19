@@ -106,25 +106,30 @@ library(RcppRoll)
 byDay <- cases %>%
   pivot_longer(cols=5:ncol(cases),
                names_to="day",
-               values_to="cases") %>%
+               values_to="cases") %>% # put date columns into 'day' and number to 'cases'
   select(-Lat, -Long) %>%
   group_by(country=`Country/Region`, day) %>%
-  summarize(cases=sum(cases)) %>%
+  summarize(cases=sum(cases)) %>% # in case any sub-national locations, aggregate to country by day
   mutate(day = as.POSIXct(strptime(day, format="%m/%d/%y"))) %>%
   filter(country == "China" | country == "France" | country == "Germany" |# country == "Iran" | 
-           country == "Italy" | country == "Spain" | country == "US") %>%
-  arrange(desc(country, day)) %>%
+           country == "Italy" | country == "Spain" | country == "US") %>% # limit to hardest hit countries
   group_by(country) %>%
-  mutate(new_cases=cases - lag(cases, order_by=day),
-         week=isoweek(day)) %>%
-  arrange(desc(country, day)) %>%
+  mutate(new_cases=cases - lag(cases, order_by=day), # create a growth variable
+         week=isoweek(day)) %>% # generate a week integer 1-52 based on the date in case it helps us create a rolling average by week
+  group_by(country, week) %>%
+  mutate(week_new = round(mean(new_cases, na.rm=T),1)) %>% # rolling average by week, so both forward and backward looking window
   group_by(country) %>%
-  mutate(wk_new = roll_sum(new_cases, 7, align="right", fill=NA))
+  mutate(week_new_roll = round(roll_mean(new_cases, 7, align='right', fill=NA),1)) %>% # a rolling average of the current value plus the six previous days
+  arrange(desc(country, day)) 
 
+  # visual inspection suggests calendar week average and previous week average are about the same 
+
+str(byDay)
+describe(byDay$wk_new)
 
   # legend
 
-ggplot(byDay, aes(cases, wk_new, color=country)) + 
+ggplot(byDay, aes(cases, week_new_roll, color=country)) + 
   #geom_point() + 
   stat_smooth(se=F) +
   scale_color_viridis_d() + 
@@ -595,3 +600,68 @@ ggsave("viz/killian states fatalities 28 March 2020.png",
 
 
 
+
+
+# deaths ------------------------------------------------------------------
+
+str(dths)
+
+DthbyDay <- dths %>%
+  pivot_longer(cols=5:ncol(dths),
+               names_to="day",
+               values_to="deaths") %>% # put date columns into 'day' and number to 'deaths'
+  select(-Lat, -Long) %>%
+  mutate(date = as.POSIXct(strptime(day, format="%m/%d/%y"))) %>%
+  group_by(country=`Country/Region`, date) %>%
+  summarize(deaths=sum(deaths)) %>% # in case any sub-national locations, aggregate to country by day
+  filter(country == "China" | country == "France" | country == "Germany" |# country == "Iran" | 
+           country == "Italy" | country == "Spain" | country == "US") %>% # limit to hardest hit countries
+  ungroup() %>% # remove the country grouping
+  group_by(country) %>%
+  mutate(new_deaths=deaths - lag(deaths, order_by=date), # create a growth variable
+         week=isoweek(date)) %>% # generate a week integer 1-52 based on the date in case it helps us create a rolling average by week
+  ungroup() %>% # remove the country grouping
+  group_by(country, week) %>%
+  mutate(week_new = round(mean(new_deaths, na.rm=T),1)) %>% # rolling average by week, so both forward and backward looking window
+  ungroup() %>% # remove country and week grouping
+  group_by(country) %>%
+  arrange(country, date) %>% # 
+  mutate(week_new_roll = round(roll_mean(new_deaths, 7, align='right', fill=NA),1)) %>% # a rolling average of the current value plus the six previous days
+  ungroup() 
+
+
+# visual inspection suggests calendar week average and previous week average are about the same 
+
+str(DthbyDay)
+
+# legend
+
+ggplot(DthbyDay, aes(date, week_new_roll, color=country)) + 
+  #geom_point() + 
+  stat_smooth(se=F) +
+  scale_color_viridis_d() + 
+  scale_y_log10(labels=comma_format(accuracy=1)) + 
+  labs(x="Total confirmed deaths",
+       y="New deaths\n(previous week)",
+       title="Trajectory of COVID-19 Confirmed Deaths\n22 Jan - 10 Apr, 2020") +
+  theme(axis.title.y=element_text(angle=0, vjust=.5)) +
+  nobord
+
+ggsave("viz/covid death trajectory legend.png",
+       device="png",
+       type="cairo",
+       height=5,
+       width=9)
+
+  # manual table of days since average daily deaths exceed 3
+
+str(DthbyDay)
+
+ave3 <- data.frame(country=c("US", "Spain", "Italy", "Germany", ""),
+                   dth3 = c(as.POSIXct("2020-03-13"),
+                            as.POSIXct("2020-03-11"),
+                            as.POSIXct("2020-02-29"),
+                            as.POSIXct("2020-03-17"),
+                            as.POSIXct("2020-"))
+
+ave3
